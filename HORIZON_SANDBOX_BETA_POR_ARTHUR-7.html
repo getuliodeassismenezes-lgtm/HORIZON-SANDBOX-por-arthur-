@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>HORIZON SANDBOX | BETA — Criado por Arthur</title>
+<style>
+:root{--bg:#070b18;--panel:#111a30;--line:#2a3b63;--cyan:#62eaff;--purple:#a78bfa}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:#f4f7ff;font:14px system-ui,Arial;overflow:hidden}
+header{height:54px;background:#10182b;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 12px;gap:8px}
+.brand{font-weight:900;letter-spacing:1px;font-size:clamp(14px,4vw,19px);color:var(--cyan);white-space:nowrap}.brand span{color:var(--purple);font-size:10px;letter-spacing:1px;border:1px solid #a78bfa77;border-radius:6px;padding:3px 5px;margin-left:4px;vertical-align:middle}
+#state{font-size:11px;color:#9ee8ce;white-space:nowrap}
+main{height:calc(100dvh - 54px - 190px);min-height:180px;position:relative;background:#030611}
+canvas{width:100%;height:100%;display:block;touch-action:none}
+#hud{position:absolute;top:8px;left:8px;padding:7px 9px;border:1px solid #34466b;border-radius:9px;background:#071126d9;font-size:10px;line-height:1.6;pointer-events:none}
+#bottom{height:190px;background:#10182b;border-top:1px solid var(--line);padding:7px;display:flex;flex-direction:column;gap:7px}
+#cats,#items,#actions{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+button{border:1px solid #35476f;background:#1a2947;color:#f5f7ff;border-radius:9px;padding:9px 11px;font-weight:650;font-size:12px;white-space:nowrap}
+button:active{filter:brightness(1.35);transform:scale(.97)}
+button.active{background:#28547b;border-color:var(--cyan);box-shadow:0 0 10px #45d9ff35}
+#items{height:67px}
+.item{min-width:66px;height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:4px}
+.swatch{width:22px;height:22px;border-radius:50%;border:1px solid #ffffff77}
+.item small{font-size:10px}
+#actions button{padding:8px 10px}
+footer{text-align:center;color:#7f91b4;font-size:9px}
+#settings{position:absolute;right:8px;top:8px}
+#settings button{padding:7px 10px}#downloadGame{padding:7px 9px;font-size:11px;background:#173b55;border-color:#62eaff}
+#modal{display:none;position:absolute;z-index:5;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:min(90%,330px);background:#111d38;border:1px solid #6687d6;border-radius:14px;padding:15px;box-shadow:0 12px 45px #000b}
+#modal h3{margin:0 0 12px;color:var(--cyan)}#modal label{display:block;margin:10px 0 4px;font-size:12px}#modal input{width:100%;accent-color:var(--cyan)}
+#modal button{margin-top:12px}
+@media(max-height:650px){#bottom{height:165px}main{height:calc(100dvh - 54px - 165px)}#items{height:55px}.item{height:53px}}
+</style>
+</head>
+<body>
+<header><div class="brand">HORIZON SANDBOX <span>BETA</span></div><div style="display:flex;align-items:center;gap:7px"><div id="state">● SIMULAÇÃO ATIVA</div><button id="downloadGame" type="button">⬇ Baixar</button></div></header>
+<main id="stage">
+<canvas id="world"></canvas>
+<div id="hud"><strong>HORIZON SANDBOX</strong><br><span style="color:#c5a8ff">BETA • EM DESENVOLVIMENTO</span><br><span id="stats">Partículas: 0</span><br><span id="toolname">Ferramenta: Areia</span></div>
+<div id="settings"><button id="openSettings">⚙</button></div>
+<div id="modal">
+<h3>CONTROLES HORIZON</h3>
+<label for="brush">Tamanho do pincel</label><input id="brush" type="range" min="1" max="12" value="3">
+<label for="simSpeed">Velocidade da simulação</label><input id="simSpeed" type="range" min="1" max="4" value="2">
+<label for="heat">Temperatura ambiente</label><input id="heat" type="range" min="-50" max="300" value="20">
+<label for="grav">Gravidade</label><input id="grav" type="range" min="0" max="3" step=".25" value="1">
+<button id="closeSettings">Fechar</button>
+</div>
+</main>
+<section id="bottom">
+<div id="cats"></div><div id="items"></div>
+<div id="actions">
+<button id="pause">⏸ Pausar</button><button id="clear">🗑 Limpar</button>
+<button id="random">🎲 Aleatório</button><button id="bh">🕳 Criar buraco negro</button>
+<button id="meteor">☄ Lançar meteoro</button><button id="storm">🌪 Tornado</button>
+<button id="zap">⚡ Raio</button><button id="boom">💥 Explosão</button>
+</div>
+<footer>HORIZON SANDBOX • BETA — Criado por Arthur</footer>
+</section>
+<script>
+"use strict";
+(()=>{
+const canvas=document.getElementById("world"),ctx=canvas.getContext("2d");
+const COLS=150,ROWS=95,N=COLS*ROWS;
+const defs={
+ sand:["Areia","#d9bd79","powder",5],water:["Água","#278fe8","liquid",3],
+ stone:["Pedra","#858b9b","solid",9],dirt:["Terra","#805532","powder",6],
+ wood:["Madeira","#a56b3c","solid",5],fire:["Fogo","#ff6728","gas",0],
+ smoke:["Fumaça","#89909e","gas",0],lava:["Lava","#ff481e","liquid",8],
+ ice:["Gelo","#91eaff","solid",5],plant:["Planta","#36bd55","solid",2],
+ steam:["Vapor","#d8e8ee","gas",0],mud:["Lama","#75543d","liquid",5],
+ metal:["Metal","#b3bfce","solid",10],oil:["Óleo","#57431c","liquid",2],
+ acid:["Ácido","#a7ed36","liquid",3],glass:["Vidro","#a6e7ed","solid",8],
+ crystal:["Cristal","#b38aff","solid",8],snow:["Neve","#effaff","powder",2],
+ seed:["Semente","#a5a044","powder",2],salt:["Sal","#f4f0e5","powder",4],
+ star:["Estrela","#ffe77b","solid",10],planet:["Planeta","#448ee0","solid",10],
+ moon:["Lua","#c6c9d8","solid",9],comet:["Cometa","#87eaff","solid",7],
+ neutron:["Estrela de nêutrons","#c09aff","solid",10],
+ antimatter:["Antimatéria","#ff4fe1","special",0]
+};
+const groups={
+ "🌱 Natureza":["sand","water","stone","dirt","wood","plant","seed","mud","salt","snow"],
+ "🔥 Elementos":["fire","smoke","lava","ice","steam","oil","acid","metal","glass","crystal"],
+ "🌌 Espaço":["star","planet","moon","comet","neutron","antimatter"],
+ "🧰 Ferramentas":["erase","heat","cool","lightning","blackhole","meteor","tornado","explosion"]
+};
+const specialNames={erase:"Borracha",heat:"Aquecer",cool:"Resfriar",lightning:"Raio",blackhole:"Buraco negro",meteor:"Meteoro",tornado:"Tornado",explosion:"Explosão"};
+let grid=new Array(N).fill(null),effects=[],selected="sand",group=Object.keys(groups)[0],paused=false,brush=3,ambient=20,gravity=1,speed=2,frame=0;
+let dpr=1,cw=0,ch=0,cell=1,ox=0,oy=0,pointer=false,lastPoint=null;
+const idx=(x,y)=>y*COLS+x,inside=(x,y)=>x>=0&&x<COLS&&y>=0&&y<ROWS;
+const get=(x,y)=>inside(x,y)?grid[idx(x,y)]:null;
+const particle=id=>({id,temp:({fire:500,lava:1100,ice:-10,snow:-5,star:5500,neutron:100000}[id]??ambient),vx:0,vy:0,life:0});
+function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);cw=r.width;ch=r.height;canvas.width=Math.round(cw*dpr);canvas.height=Math.round(ch*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);cell=Math.min(cw/COLS,ch/ROWS);ox=(cw-COLS*cell)/2;oy=(ch-ROWS*cell)/2}
+addEventListener("resize",resize);resize();
+function put(x,y,id){if(inside(x,y)&&!grid[idx(x,y)])grid[idx(x,y)]=particle(id)}
+function swap(x,y,nx,ny){if(!inside(nx,ny))return false;let a=idx(x,y),b=idx(nx,ny),p=grid[a],q=grid[b];if(!p)return false;if(q&&defs[q.id]&&defs[p.id]&&defs[q.id][3]>=defs[p.id][3])return false;grid[a]=q;grid[b]=p;return true}
+function drawAt(x,y){
+ brush=+document.getElementById("brush").value;
+ for(let dy=-brush;dy<=brush;dy++)for(let dx=-brush;dx<=brush;dx++){
+  if(dx*dx+dy*dy>brush*brush)continue;let px=x+dx,py=y+dy;if(!inside(px,py))continue;
+  if(selected==="erase"){grid[idx(px,py)]=null;continue}
+  if(selected==="heat"||selected==="cool"){let p=get(px,py);if(p)p.temp+=selected==="heat"?100:-100;continue}
+  if(selected==="blackhole"){if(!effects.some(e=>e.type==="blackhole"))effects.push({type:"blackhole",x:px,y:py,life:0});continue}
+  if(selected==="meteor"){if(!effects.some(e=>e.type==="meteor"))launchMeteor(px,py);continue}
+  if(selected==="tornado"){if(!effects.some(e=>e.type==="tornado"))effects.push({type:"tornado",x:px,y:py,life:0});continue}
+  if(selected==="lightning"){effects.push({type:"lightning",x:px,y:py,life:0});continue}
+  if(selected==="explosion"){effects.push({type:"explosion",x:px,y:py,r:1,life:0});continue}
+  if(defs[selected])put(px,py,selected);
+ }
+}
+function launchMeteor(x=Math.random()*COLS,y=0){effects.push({type:"meteor",x,y,vx:(Math.random()-.5)*.7,vy:1.8,life:0})}
+function updateParticle(x,y,p){
+ p.life++;
+ const def=defs[p.id];if(!def)return;
+ p.temp+=(ambient-p.temp)*.0005;
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){let q=get(x+dx,y+dy);if(q)p.temp+=(q.temp-p.temp)*.008}
+ if(p.id==="water"&&p.temp>100){grid[idx(x,y)]=particle("steam");return}
+ if((p.id==="water"||p.id==="mud")&&p.temp<0){grid[idx(x,y)]=particle("ice");return}
+ if((p.id==="ice"||p.id==="snow")&&p.temp>2){grid[idx(x,y)]=particle("water");return}
+ if(p.id==="steam"&&p.temp<80){grid[idx(x,y)]=particle("water");return}
+ if(p.id==="sand"&&p.temp>1450){grid[idx(x,y)]=particle("glass");return}
+ if((p.id==="wood"||p.id==="plant"||p.id==="oil")&&p.temp>180){grid[idx(x,y)]=particle("fire");return}
+ if(p.id==="fire"){p.temp-=1.2;if(p.life>45+Math.random()*45){grid[idx(x,y)]=Math.random()<.7?particle("smoke"):null;return}}
+ if(p.id==="lava"&&p.temp<650){grid[idx(x,y)]=particle("stone");return}
+ for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){let nx=x+dx,ny=y+dy,q=get(nx,ny);if(!q)continue;
+  if(p.id==="fire"&&["wood","plant","oil","seed"].includes(q.id)&&Math.random()<.035)grid[idx(nx,ny)]=particle("fire");
+  if(p.id==="fire"&&q.id==="water"&&Math.random()<.08)grid[idx(x,y)]=particle("steam");
+  if(p.id==="lava"&&q.id==="water"&&Math.random()<.12)grid[idx(nx,ny)]=particle("steam");
+  if(p.id==="acid"&&["wood","plant","metal","stone"].includes(q.id)&&Math.random()<.012)grid[idx(nx,ny)]=null;
+  if(p.id==="water"&&q.id==="seed"&&Math.random()<.008)grid[idx(nx,ny)]=particle("plant");
+ }
+ let dir=Math.random()<.5?-1:1;
+ if(def[2]==="powder"){
+  if(!swap(x,y,x,y+1)&&!swap(x,y,x+dir,y+1))swap(x,y,x-dir,y+1);
+ }else if(def[2]==="liquid"){
+  if(!swap(x,y,x,y+1)&&!swap(x,y,x+dir,y+1)&&!swap(x,y,x-dir,y+1)){
+   if(!swap(x,y,x+dir,y))swap(x,y,x-dir,y);
+  }
+ }else if(def[2]==="gas"){
+  if(!swap(x,y,x,y-1)&&!swap(x,y,x+dir,y-1)&&!swap(x,y,x-dir,y-1))if(Math.random()<.2)swap(x,y,x+dir,y);
+ }
+}
+function updateEffects(){
+ for(const e of effects){
+  e.life++;
+  if(e.type==="blackhole"){
+   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){let p=get(x,y);if(!p)continue;let dx=e.x-x,dy=e.y-y,d=Math.hypot(dx,dy);if(d<1.5){grid[idx(x,y)]=null;continue}if(d<27){let f=.035/(d+1);p.vx+=dx*f;p.vy+=dy*f;if(d<4&&Math.random()<.12)grid[idx(x,y)]=null}}
+  }
+  if(e.type==="tornado"){
+   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){let p=get(x,y);if(!p)continue;let dx=x-e.x,dy=y-e.y,d=Math.hypot(dx,dy);if(d<20&&d>1){let f=(1-d/20)*.12;p.vx+=(-dy/d)*f;p.vy+=(dx/d)*f-.035}}
+   if(e.life>850)e.dead=true;
+  }
+  if(e.type==="meteor"){
+   e.x+=e.vx;e.y+=e.vy;e.vy+=.035;
+   if(Math.random()<.65&&inside(Math.round(e.x),Math.round(e.y)))grid[idx(Math.round(e.x),Math.round(e.y))]=particle("fire");
+   if(e.y>=ROWS-2||e.x<0||e.x>=COLS){effects.push({type:"explosion",x:Math.max(0,Math.min(COLS-1,Math.round(e.x))),y:ROWS-3,r:1,life:0});e.dead=true}
+  }
+  if(e.type==="lightning"){
+   for(let k=0;k<8;k++){let x=Math.round(e.x+Math.sin((e.life+k)*1.7)*2),y=Math.round(e.y+k*2);let p=get(x,y);if(p){p.temp+=120;if(p.id==="water"||p.id==="metal")p.life+=3;else if(Math.random()<.2)grid[idx(x,y)]=particle("fire")}}
+   if(e.life>8)e.dead=true;
+  }
+  if(e.type==="explosion"){
+   e.r+=1.4;for(let y=Math.max(0,Math.floor(e.y-e.r));y<Math.min(ROWS,Math.ceil(e.y+e.r));y++)for(let x=Math.max(0,Math.floor(e.x-e.r));x<Math.min(COLS,Math.ceil(e.x+e.r));x++){let p=get(x,y),d=Math.hypot(x-e.x,y-e.y);if(p&&d<e.r+1){p.temp+=18;p.vx+=(x-e.x)*.025;p.vy+=(y-e.y)*.025}}
+   if(e.life>12)e.dead=true;
+  }
+ }
+ effects=effects.filter(e=>!e.dead);
+}
+function update(){
+ frame++;updateEffects();
+ for(let y=ROWS-1;y>=0;y--){let start=Math.random()<.5?0:COLS-1,end=start===0?COLS:-1,step=start===0?1:-1;
+  for(let x=start;x!==end;x+=step){let p=get(x,y);if(!p)continue;
+   if(p.vx||p.vy){let nx=Math.round(x+p.vx),ny=Math.round(y+p.vy);if(inside(nx,ny)&&!get(nx,ny)){grid[idx(nx,ny)]=p;grid[idx(x,y)]=null}p.vx*=.82;p.vy*=.82}
+   if(get(x,y)===p)updateParticle(x,y,p);
+  }
+ }
+}
+function draw(){
+ ctx.fillStyle="#030611";ctx.fillRect(0,0,cw,ch);ctx.save();ctx.translate(ox,oy);
+ ctx.fillStyle="#071020";ctx.fillRect(0,0,COLS*cell,ROWS*cell);
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){let p=get(x,y);if(!p)continue;let col=defs[p.id]?.[1]||"#fff";if(p.id==="fire")col=Math.random()<.45?"#ffbd42":"#ff5425";if(p.id==="lava")col=Math.random()<.3?"#ffc044":"#ff401c";ctx.fillStyle=col;ctx.fillRect(x*cell,y*cell,Math.ceil(cell),Math.ceil(cell));}
+ for(const e of effects){
+  if(e.type==="blackhole"){let cx=(e.x+.5)*cell,cy=(e.y+.5)*cell;ctx.save();ctx.translate(cx,cy);ctx.rotate(frame*.025);ctx.strokeStyle="#b76aff";ctx.lineWidth=Math.max(1,cell);ctx.shadowBlur=18;ctx.shadowColor="#a45cff";ctx.beginPath();ctx.ellipse(0,0,cell*9,cell*2.6,0,0,Math.PI*2);ctx.stroke();ctx.rotate(-frame*.05);ctx.strokeStyle="#ff9c56";ctx.beginPath();ctx.ellipse(0,0,cell*6,cell*1.4,0,0,Math.PI*2);ctx.stroke();ctx.fillStyle="#000";ctx.beginPath();ctx.arc(0,0,cell*2.2,0,Math.PI*2);ctx.fill();ctx.restore()}
+  if(e.type==="meteor"){ctx.fillStyle="#ff742c";ctx.shadowBlur=18;ctx.shadowColor="#ff4b16";ctx.beginPath();ctx.arc((e.x+.5)*cell,(e.y+.5)*cell,cell*2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0}
+  if(e.type==="tornado"){ctx.strokeStyle="#b9d9f5";ctx.lineWidth=1.5;for(let i=0;i<9;i++){ctx.beginPath();ctx.ellipse((e.x+.5)*cell,(e.y+i*1.1)*cell,cell*(3+i*.45),cell*.65,frame*.04+i,0,Math.PI*2);ctx.stroke()}}
+  if(e.type==="lightning"){ctx.strokeStyle="#b5f8ff";ctx.shadowBlur=12;ctx.shadowColor="#63eaff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(e.x*cell,e.y*cell);for(let i=1;i<9;i++)ctx.lineTo((e.x+Math.sin(i*4+e.life)*2)*cell,(e.y+i*2)*cell);ctx.stroke();ctx.shadowBlur=0}
+  if(e.type==="explosion"){ctx.strokeStyle=`rgba(255,120,35,${1-e.life/13})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc((e.x+.5)*cell,(e.y+.5)*cell,e.r*cell,0,Math.PI*2);ctx.stroke()}
+ }
+ ctx.restore();
+ let count=0;for(const p of grid)if(p)count++;document.getElementById("stats").textContent="Partículas: "+count;
+}
+function loop(){if(!paused)for(let i=0;i<speed;i++)update();draw();requestAnimationFrame(loop)}
+function makeUI(){
+ const cats=document.getElementById("cats"),items=document.getElementById("items");
+ function renderCats(){cats.innerHTML="";Object.keys(groups).forEach(g=>{let b=document.createElement("button");b.textContent=g;b.classList.toggle("active",g===group);b.onclick=()=>{group=g;renderCats();renderItems()};cats.appendChild(b)})}
+ function renderItems(){items.innerHTML="";groups[group].forEach(id=>{let b=document.createElement("button");b.className="item";b.classList.toggle("active",selected===id);let name=defs[id]?.[0]||specialNames[id];let color=defs[id]?.[1]||({erase:"#ffffff",heat:"#ff4d28",cool:"#70dfff",lightning:"#bafaff",blackhole:"#9d5cff",meteor:"#ff762e",tornado:"#aabbd0",explosion:"#ff9a38"}[id]);b.innerHTML=`<span class="swatch" style="background:${color}"></span><small>${name}</small>`;b.onclick=()=>{selected=id;document.getElementById("toolname").textContent="Ferramenta: "+name;renderItems()};items.appendChild(b)})}
+ renderCats();renderItems();
+}
+function choose(id){selected=id;let name=defs[id]?.[0]||specialNames[id];document.getElementById("toolname").textContent="Ferramenta: "+name;makeUI()}
+document.getElementById("downloadGame").onclick=()=>{
+ const copy=document.documentElement.cloneNode(true);
+ const blob=new Blob(["<!doctype html>\n"+copy.outerHTML],{type:"text/html;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;a.download="HORIZON_SANDBOX_BETA_POR_ARTHUR.html";
+ document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+};
+canvas.addEventListener("pointerdown",e=>{pointer=true;canvas.setPointerCapture(e.pointerId);let r=canvas.getBoundingClientRect(),x=Math.floor((e.clientX-r.left-ox)/cell),y=Math.floor((e.clientY-r.top-oy)/cell);lastPoint={x,y};drawAt(x,y)});
+canvas.addEventListener("pointermove",e=>{if(!pointer)return;let r=canvas.getBoundingClientRect(),x=Math.floor((e.clientX-r.left-ox)/cell),y=Math.floor((e.clientY-r.top-oy)/cell);if(lastPoint&&Math.hypot(x-lastPoint.x,y-lastPoint.y)>1){drawAt(x,y);lastPoint={x,y}}});
+canvas.addEventListener("pointerup",()=>{pointer=false;lastPoint=null});canvas.addEventListener("pointercancel",()=>{pointer=false;lastPoint=null});
+document.getElementById("pause").onclick=()=>{paused=!paused;document.getElementById("pause").textContent=paused?"▶ Continuar":"⏸ Pausar";document.getElementById("state").textContent=paused?"Ⅱ SIMULAÇÃO PAUSADA":"● SIMULAÇÃO ATIVA"};
+document.getElementById("clear").onclick=()=>{grid.fill(null);effects=[]};
+document.getElementById("random").onclick=()=>{grid.fill(null);let ids=["sand","water","stone","wood","plant","snow","lava","ice","metal"];for(let i=0;i<2400;i++)put(Math.random()*COLS|0,Math.random()*ROWS|0,ids[Math.random()*ids.length|0])};
+document.getElementById("bh").onclick=()=>choose("blackhole");
+document.getElementById("meteor").onclick=()=>{launchMeteor();choose("sand")};
+document.getElementById("storm").onclick=()=>effects.push({type:"tornado",x:COLS/2,y:ROWS/2,life:0});
+document.getElementById("zap").onclick=()=>effects.push({type:"lightning",x:Math.random()*COLS,y:0,life:0});
+document.getElementById("boom").onclick=()=>effects.push({type:"explosion",x:COLS/2,y:ROWS/2,r:1,life:0});
+document.getElementById("openSettings").onclick=()=>document.getElementById("modal").style.display="block";
+document.getElementById("closeSettings").onclick=()=>document.getElementById("modal").style.display="none";
+document.getElementById("simSpeed").oninput=e=>speed=+e.target.value;
+document.getElementById("heat").oninput=e=>ambient=+e.target.value;
+document.getElementById("grav").oninput=e=>gravity=+e.target.value;
+makeUI();loop();
+})();
+</script>
+</body>
+</html>
